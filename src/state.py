@@ -11,4 +11,6 @@ class GraphState(TypedDict):
     retry_count: int
     answer: str
     sources: List[str]
+    hallucination_score: float
+
 

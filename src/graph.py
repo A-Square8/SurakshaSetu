@@ -7,6 +7,7 @@ from src.nodes.query_analysis import query_analysis_node
 from src.nodes.retrieval import retrieval_node
 from src.nodes.grading import grading_node
 from src.nodes.generation import generation_node
+from src.nodes.hallucination import hallucination_check_node
 
 
 def route_after_grading(state):
@@ -15,6 +16,14 @@ def route_after_grading(state):
     if state.get("retry_count", 0) >= 2:
         return "generate"
     return "retry"
+
+
+def route_after_hallucination(state):
+    if state.get("hallucination_score", 0.0) >= 0.5:
+        return "end"
+    if state.get("retry_count", 0) >= 2:
+        return "end"
+    return "regenerate"
 
 
 def retry_node(state):
@@ -30,6 +39,7 @@ def build_graph():
     g.add_node("grading", grading_node)
     g.add_node("retry", retry_node)
     g.add_node("generation", generation_node)
+    g.add_node("hallucination_check", hallucination_check_node)
 
     g.set_entry_point("query_analysis")
     g.add_edge("query_analysis", "retrieval")
@@ -41,7 +51,12 @@ def build_graph():
     })
 
     g.add_edge("retry", "query_analysis")
-    g.add_edge("generation", END)
+    g.add_edge("generation", "hallucination_check")
+
+    g.add_conditional_edges("hallucination_check", route_after_hallucination, {
+        "end": END,
+        "regenerate": "generation"
+    })
 
     return g.compile()
 
