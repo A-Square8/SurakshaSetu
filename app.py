@@ -1,5 +1,6 @@
 import os
 import json
+import uuid
 import shutil
 from datetime import datetime
 from dotenv import load_dotenv
@@ -18,15 +19,20 @@ DOCS_DIR = "data/docs"
 DB_DIR = "data/chroma"
 FEEDBACK_FILE = "data/feedback.json"
 
+sessions = {}
+
 
 class QueryRequest(BaseModel):
     question: str
+    session_id: Optional[str] = None
 
 
 class QueryResponse(BaseModel):
     answer: str
     sources: List[str]
     category: str
+    session_id: str
+    web_search_used: bool
 
 
 class FeedbackRequest(BaseModel):
@@ -47,11 +53,32 @@ class DocumentInfo(BaseModel):
 
 @api.post("/query", response_model=QueryResponse)
 def query(req: QueryRequest):
-    result = graph.invoke({"question": req.question, "retry_count": 0})
+    sid = req.session_id or str(uuid.uuid4())
+    history = sessions.get(sid, [])
+
+    context_question = req.question
+    if history:
+        recent = history[-3:]
+        prev = " | ".join([f"Q: {h['q']} A: {h['a'][:100]}" for h in recent])
+        context_question = f"Previous conversation: {prev}\n\nCurrent question: {req.question}"
+
+    result = graph.invoke({
+        "question": context_question,
+        "retry_count": 0,
+        "chat_history": history,
+        "session_id": sid,
+        "web_search_used": False
+    })
+
+    history.append({"q": req.question, "a": result.get("answer", "")})
+    sessions[sid] = history
+
     return QueryResponse(
         answer=result.get("answer", ""),
         sources=result.get("sources", []),
-        category=result.get("category", "")
+        category=result.get("category", ""),
+        session_id=sid,
+        web_search_used=result.get("web_search_used", False)
     )
 
 

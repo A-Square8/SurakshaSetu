@@ -1,4 +1,4 @@
-from typing import TypedDict, List, Any
+from typing import TypedDict, List, Any, Optional
 
 
 class GraphState(TypedDict):
@@ -12,5 +12,6 @@ class GraphState(TypedDict):
     answer: str
     sources: List[str]
     hallucination_score: float
-
-
+    chat_history: List[dict]
+    session_id: Optional[str]
+    web_search_used: bool
